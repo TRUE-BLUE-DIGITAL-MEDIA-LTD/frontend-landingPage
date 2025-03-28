@@ -6,9 +6,6 @@ function generateSiteMap({ host }) {
     <url>
       <loc>https://${host}/</loc>
     </url>
-    <url>
-      <loc>https://${host}/welcome</loc>
-    </url>
   </urlset>
 `;
 }
