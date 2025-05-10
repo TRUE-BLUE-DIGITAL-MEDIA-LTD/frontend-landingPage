@@ -3,30 +3,32 @@ import {
   GetLandingPageService,
   ResponseGetLandingPageService,
 } from "@/services/landingPage";
+import { DirectLinkService } from "@/services/merchant";
+import * as crypto from "crypto";
+import { GetServerSideProps } from "next";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { GoogleAnalytics } from "nextjs-google-analytics";
-import React, { useEffect, useState } from "react";
-import Swal from "sweetalert2";
-import { event } from "nextjs-google-analytics";
-import { DirectLinkService } from "@/services/merchant";
+import { event, GoogleAnalytics } from "nextjs-google-analytics";
+import { useEffect, useState } from "react";
 import requestIp from "request-ip";
-import { GetServerSideProps } from "next";
+import Swal from "sweetalert2";
 import { Language } from "../interfaces";
-import * as crypto from "crypto";
+import { JSDOM } from "jsdom";
 
 function Index({
   landingPage,
   errorMessage,
   country,
+  updatedHTML,
 }: {
   landingPage: ResponseGetLandingPageService;
   errorMessage?: string;
   country: string;
+  updatedHTML: string;
 }) {
   const router = useRouter();
   const mainLink = landingPage?.mainButton;
-  console.log("country", country);
+
   const preventDefaultForSubmitButtons = () => {
     const submitButtons = document.querySelectorAll('button[type="submit"]');
     const emailInput: HTMLInputElement = document.querySelector(
@@ -181,7 +183,7 @@ function Index({
         <link rel="shortcut icon" href={landingPage.icon} />
         <title>{landingPage.title}</title>
       </Head>
-      <main dangerouslySetInnerHTML={{ __html: `${landingPage.html}` }} />
+      <main dangerouslySetInnerHTML={{ __html: `${updatedHTML}` }} />
     </div>
   );
 }
@@ -220,8 +222,27 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       host,
       language: userLanguage,
     });
+
+    const dom = new JSDOM(landingPage.html);
+    let updatedHTML: string = landingPage.html;
+    const scriptProductionMultipleForm = dom.window.document.querySelector(
+      'script.script_multiple_form[src="https://oxyclick.com/unlayer-custom/script-multiple-form.js"]'
+    );
+    const scriptDevMultipleForm = dom.window.document.querySelector(
+      'script.script_multiple_form[src="http://localhost:8080/unlayer-custom/script-multiple-form.js"]'
+    );
+    if (scriptProductionMultipleForm && host.includes("localhost")) {
+      scriptProductionMultipleForm.remove();
+      updatedHTML = dom.serialize();
+    }
+    if (scriptDevMultipleForm && !host.includes("localhost")) {
+      scriptDevMultipleForm.remove();
+      updatedHTML = dom.serialize();
+    }
+
     return {
       props: {
+        updatedHTML,
         landingPage: landingPage,
         country,
       },

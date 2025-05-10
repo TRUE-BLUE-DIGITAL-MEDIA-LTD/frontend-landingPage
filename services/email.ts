@@ -12,7 +12,7 @@ export async function CreateEmailService({
   try {
     const res = await axios.post(
       process.env.NEXT_PUBLIC_NODE_ENV === "development"
-        ? "http://localhost:3000/public/email/collect"
+        ? "http://localhost:3001/public/email/collect"
         : "https://backend-landingpage-admin-dasboard-n2vkrqhb2a-uc.a.run.app/public/email/collect",
       {
         email,
