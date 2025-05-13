@@ -31,12 +31,34 @@ function Index({
 
   const preventDefaultForSubmitButtons = () => {
     const submitButtons = document.querySelectorAll('button[type="submit"]');
+
     const emailInput: HTMLInputElement = document.querySelector(
       'input[type="email"][name="email"]'
     );
     const NameInput: HTMLInputElement = document.querySelector(
       'input[type="text"][name="name"]'
     );
+
+    const buttons = document.querySelectorAll("button");
+    const multipleFormButtons = Array.from(buttons).filter((button) =>
+      Array.from(button.classList).some((className) =>
+        className.includes("form")
+      )
+    );
+    if (multipleFormButtons.length > 0) {
+      multipleFormButtons.forEach((button) => {
+        const value = JSON.parse(button.getAttribute("value") as string) as {
+          url: string;
+        };
+        button.addEventListener("click", function (e) {
+          event("click", {
+            category: "multiple-form-step",
+            label: value.url,
+          });
+          e.preventDefault();
+        });
+      });
+    }
 
     const anchorTags = document.querySelectorAll("a");
     anchorTags.forEach((button) => {
