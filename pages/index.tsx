@@ -14,6 +14,7 @@ import requestIp from "request-ip";
 import Swal from "sweetalert2";
 import { Language } from "../interfaces";
 import { JSDOM } from "jsdom";
+import Script from "next/script";
 
 function Index({
   landingPage,
@@ -180,12 +181,30 @@ function Index({
   }
 
   return (
-    <div>
-      <GoogleAnalytics
-        trackPageViews
-        nonce={crypto.randomBytes(16).toString("base64")}
-        gaMeasurementId={landingPage?.domain?.googleAnalyticsId}
-      />
+    <>
+      {landingPage.domain.oxyeyeAnalyticsId && (
+        <Script id="matomo" strategy="afterInteractive">
+          {`
+          var _paq = window._paq = window._paq || [];
+          _paq.push(['trackPageView']);
+          _paq.push(['enableLinkTracking']);
+          (function() {
+            var u="//oxyeye.oxyclick.com/";
+            _paq.push(['setTrackerUrl', u+'matomo.php']);
+            _paq.push(['setSiteId', '${landingPage.domain.oxyeyeAnalyticsId}']);
+            var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+            g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+          })();
+        `}
+        </Script>
+      )}
+      {landingPage.domain.googleAnalyticsId && (
+        <GoogleAnalytics
+          trackPageViews
+          nonce={crypto.randomBytes(16).toString("base64")}
+          gaMeasurementId={landingPage.domain.googleAnalyticsId}
+        />
+      )}
 
       <Head>
         <meta name="description" content={landingPage.description} />
@@ -206,7 +225,7 @@ function Index({
         <title>{landingPage.title}</title>
       </Head>
       <main dangerouslySetInnerHTML={{ __html: `${updatedHTML}` }} />
-    </div>
+    </>
   );
 }
 
