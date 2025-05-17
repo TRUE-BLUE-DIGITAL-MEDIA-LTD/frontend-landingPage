@@ -213,7 +213,10 @@ function Index({
         <meta property="og:type" content="website" />
         <meta property="og:description" content={landingPage.description} />
         <meta property="og:image" content={landingPage.backgroundImage} />
-        <meta property="og:url" content="https://bestDatingSite.com" />
+        <meta
+          property="og:url"
+          content={`https://${landingPage.domain.name}`}
+        />
 
         {/* tweeter sharing link */}
         <meta name="twitter:title" content={landingPage.title} />
