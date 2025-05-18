@@ -7,7 +7,6 @@ export interface LandingPage {
   description: string;
   backgroundImage: string;
   icon: string | null;
-  googleAnalyticsId: string | null;
   language: Language;
   html: string;
   json: string;
