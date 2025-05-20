@@ -48,13 +48,12 @@ function Index({
     );
     if (multipleFormButtons.length > 0) {
       multipleFormButtons.forEach((button) => {
-        const value = JSON.parse(button.getAttribute("value") as string) as {
-          url: string;
-        };
+        const classId = button.classList;
+        const text = button.textContent;
         button.addEventListener("click", function (e) {
-          event("click", {
+          event(classId[0], {
             category: "multiple-form-step",
-            label: value.url,
+            label: text,
           });
           e.preventDefault();
         });
