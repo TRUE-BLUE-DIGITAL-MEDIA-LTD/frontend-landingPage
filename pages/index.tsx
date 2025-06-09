@@ -169,34 +169,38 @@ function Index({
   }
   if (!landingPage.id) {
     return (
-      <div className="w-screen h-screen bg-black font-Anuphan">
-        <div className="flex p-10 justify-center text-center  text-white items-center w-full h-full">
-          <h1 className="text-base lg:text-3xl font-bold">
-            This domain {landingPage.domain.name} has no landing page
-          </h1>
+      <>
+        {" "}
+        <Head>
+          {/* facebook sharing link */}
+          <meta property="og:title" content={landingPage.domain.name} />
+          <meta
+            property="og:site_name"
+            content={landingPage.domain.name.split(".")[0]}
+          />
+          <meta property="og:type" content="website" />
+          <meta
+            property="og:url"
+            content={`https://${landingPage.domain.name}`}
+          />
+          <meta
+            name="viewport"
+            content="initial-scale=1.0, width=device-width"
+          />
+        </Head>
+        <div className="w-screen h-screen bg-black font-Anuphan">
+          <div className="flex p-10 justify-center text-center  text-white items-center w-full h-full">
+            <h1 className="text-base lg:text-3xl font-bold">
+              This domain {landingPage.domain.name} has no landing page
+            </h1>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
     <>
-      {landingPage.domain.oxyeyeAnalyticsId && (
-        <Script id="matomo" strategy="afterInteractive">
-          {`
-          var _paq = window._paq = window._paq || [];
-          _paq.push(['trackPageView']);
-          _paq.push(['enableLinkTracking']);
-          (function() {
-            var u="//oxyeye.oxyclick.com/";
-            _paq.push(['setTrackerUrl', u+'matomo.php']);
-            _paq.push(['setSiteId', '${landingPage.domain.oxyeyeAnalyticsId}']);
-            var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
-            g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
-          })();
-        `}
-        </Script>
-      )}
       {landingPage.domain.googleAnalyticsId && (
         <GoogleAnalytics
           trackPageViews
@@ -209,6 +213,10 @@ function Index({
         <meta name="description" content={landingPage.description} />
         {/* facebook sharing link */}
         <meta property="og:title" content={landingPage.title} />
+        <meta
+          property="og:site_name"
+          content={landingPage.domain.name.split(".")[0]}
+        />
         <meta property="og:type" content="website" />
         <meta property="og:description" content={landingPage.description} />
         <meta property="og:image" content={landingPage.backgroundImage} />
@@ -285,8 +293,8 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 
     return {
       props: {
-        updatedHTML,
-        landingPage: landingPage,
+        updatedHTML: updatedHTML ?? null,
+        landingPage: landingPage ?? null,
         country,
       },
     };
