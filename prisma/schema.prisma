@@ -1,0 +1,481 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+  email    String   @unique
+  hash     String
+  name     String
+  image    String
+
+  provider Provider
+  role     Role     @default(user)
+
+  isDeleted Boolean @default(false)
+
+  landingPage LandingPage[]
+
+  partnerId String? @db.ObjectId
+
+  resetToken          String?
+  resetTokenExpiresAt DateTime?
+  IsResetPassword     Boolean   @default(false)
+  TOTPsecret          String?
+  TOTPurl             String?
+  TOTPenable          Boolean   @default(false)
+  TOTPhashRecovery    String?
+  TOTPexpireAt        DateTime?
+
+  bonusCalculatePeriod BonusCalculatePeriod @default(daily)
+
+  Partner           Partner[]
+  Payslip           Payslip[]
+  BonusRate         BonusRate[]
+  HistoryRecord     HistoryRecord[]
+  FavoriteOnSimCard FavoriteOnSimCard[]
+  OnlineSim         OnlineSim[]
+  Smspva            Smspva[]
+  SmsPool           SmsPool[]
+
+  @@map(name: "users")
+}
+
+enum BonusCalculatePeriod {
+  daily
+  monthly
+}
+
+enum Provider {
+  email
+}
+
+model Partner {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  affiliateId         String  @unique
+  name                String?
+  isAllowUsingSMSPVA  Boolean @default(true)
+  isAllowUsingSMSPOOL Boolean @default(true)
+
+  dailyLimitSMSPVA Float @default(20)
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+
+  ResponsibilityOnPartner ResponsibilityOnPartner[]
+  SimCardOnPartner        SimCardOnPartner[]
+  CategoryOnPartner       CategoryOnPartner[]
+}
+
+model BonusRate {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  from Float
+  to   Float
+  rate Float
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model ResponsibilityOnPartner {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  partnerId String  @db.ObjectId
+  partner   Partner @relation(fields: [partnerId], references: [id])
+
+  domainId String @unique @db.ObjectId
+  domain   Domain @relation(fields: [domainId], references: [id])
+}
+
+enum Role {
+  user
+  partner
+  manager
+  admin
+}
+
+model LandingPage {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  name String?
+
+  title           String?
+  description     String?
+  backgroundImage String?
+  icon            String?
+  language        String  @default("en")
+
+  html String
+  json String
+
+  viewCount   Int?
+  mainButton  String
+  secondOffer String?
+  backOffer   String?
+  directLink  String?
+
+  percent Float   @default(100)
+  route   String?
+
+  email Email[]
+
+  category   Category? @relation(fields: [categoryId], references: [id])
+  categoryId String?   @db.ObjectId
+
+  creator   User   @relation(fields: [creatorId], references: [id])
+  creatorId String @db.ObjectId
+
+  domain   Domain?    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  domainId String?    @db.ObjectId
+  Customer Customer[]
+
+  @@map(name: "landingPages")
+}
+
+model Domain {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  name              String  @unique
+  googleAnalyticsId String?
+  oxyeyeAnalyticsId String?
+
+  note String
+
+  netlify_siteId     String?
+  netlify_dns_zoneId String?
+  dns_servers        String[]
+
+  google_domain_id String?
+  sitemap_status   SitemapStatus
+
+  landingPages            LandingPage[]
+  ResponsibilityOnPartner ResponsibilityOnPartner[]
+
+  @@index([note])
+  @@map(name: "domains")
+}
+
+enum SitemapStatus {
+  NOT_FOUND
+  PEDDING
+  COMPLETED
+}
+
+model Category {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  title       String
+  description String?
+  background  String
+  isDeleted   Boolean @default(false)
+
+  LandingPages      LandingPage[]
+  CategoryOnPartner CategoryOnPartner[]
+}
+
+model Email {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  email String
+  name  String?
+
+  isValidate Boolean @default(false)
+
+  landingPageId String      @db.ObjectId
+  landingPages  LandingPage @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
+}
+
+model Payslip {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  recordDate     DateTime
+  name           String
+  engName        String?
+  startDate      DateTime
+  salary         Float
+  socialSecurity Float
+  bonus          Float?
+  tax            Float?
+  note           String?
+  address        String?
+  logo           String?
+
+  userId             String               @db.ObjectId
+  user               User                 @relation(fields: [userId], references: [id])
+  deductionOnPayslip DeductionOnPayslip[]
+}
+
+model DeductionOnPayslip {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  title String
+  value Float
+
+  payslipId String  @db.ObjectId
+  payslip   Payslip @relation(fields: [payslipId], references: [id])
+}
+
+model DeviceUser {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  isAutoPopulate Boolean @default(false)
+  portNumber     String  @unique
+
+  url      String?
+  country  String?
+  username String?
+  password String?
+  SimCard  SimCard[]
+}
+
+model SimCard {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  phoneNumber String        @unique
+  portNumber  String
+  imsi        String
+  iccid       String
+  simCardNote String?
+  lastUsedAt  DateTime?
+  status      StatusSimCard @default(active)
+  isActive    Boolean       @default(false)
+  expireAt    DateTime?
+  portStatus  String?
+  number      Int?
+
+  deviceUserId      String?             @db.ObjectId
+  deviceUser        DeviceUser?         @relation(fields: [deviceUserId], references: [id])
+  SimCardOnPartner  SimCardOnPartner[]
+  TagOnSimCard      TagOnSimCard[]
+  messageOnSimcards MessageOnSimcard[]
+  FavoriteOnSimCard FavoriteOnSimCard[]
+
+  @@index([isActive, portNumber, expireAt, status, simCardNote])
+}
+
+model FavoriteOnSimCard {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+
+  simCardId String  @db.ObjectId
+  simCard   SimCard @relation(fields: [simCardId], references: [id])
+
+  @@unique([userId, simCardId])
+}
+
+model MessageOnSimcard {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  message   String
+  isRead    Boolean @default(false)
+  sender    String
+  recipient String
+  status    Float
+
+  timestamp Float
+
+  simCardId String  @db.ObjectId
+  simCard   SimCard @relation(fields: [simCardId], references: [id])
+
+  @@index([simCardId, isRead])
+}
+
+model TagOnSimCard {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  tag  String
+  icon String
+
+  simCardId String  @db.ObjectId
+  simCard   SimCard @relation(fields: [simCardId], references: [id])
+
+  @@index([simCardId])
+}
+
+enum StatusSimCard {
+  active
+  inactive
+}
+
+model SimCardOnPartner {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  phoneNumber String
+  portNumber  String
+  imsi        String
+  iccid       String
+
+  partnerId String  @db.ObjectId
+  partner   Partner @relation(fields: [partnerId], references: [id])
+
+  simCardId String  @unique @db.ObjectId
+  simCard   SimCard @relation(fields: [simCardId], references: [id])
+
+  @@index([partnerId])
+}
+
+model CategoryOnPartner {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  categoryId String   @db.ObjectId
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  partnerId String  @db.ObjectId
+  partner   Partner @relation(fields: [partnerId], references: [id])
+}
+
+model ImageLibrary {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  title    String
+  type     String
+  url      String
+  blurHash String
+  size     Float
+
+  category String?
+  tag      String?
+}
+
+model HistoryRecord {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+
+  action String
+  data   String
+
+  refId    String?
+  refModel String?
+
+  @@index([userId, action])
+}
+
+model Customer {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  name         String?
+  email        String?
+  phone_number String?
+  birthday     String?
+  company      String?
+  website      String?
+  zip_code     String?
+
+  landingPageId String      @db.ObjectId
+  landingPages  LandingPage @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
+
+  isValidate Boolean @default(false)
+}
+
+model OnlineSim {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  phoneNumber String
+  expireAt    DateTime
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([expireAt])
+}
+
+model Smspva {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  isComplete  Boolean  @default(false)
+  isGetSms    Boolean  @default(false)
+  price       Float
+  orderId     String
+  phoneNumber String
+  expireAt    DateTime
+  country     String
+  serviceCode String
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model Announcement {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  title       String
+  description String
+
+  status   String
+  expireAt DateTime
+  beginAt  DateTime
+}
+
+model SmsPool {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  isComplete  Boolean  @default(false)
+  isGetSms    Boolean  @default(false)
+  price       Float
+  orderId     String
+  phoneNumber String
+  expireAt    DateTime
+  country     String
+  serviceCode String
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+}
