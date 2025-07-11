@@ -15,6 +15,7 @@ import Swal from "sweetalert2";
 import { Language } from "../interfaces";
 import { JSDOM } from "jsdom";
 import Script from "next/script";
+import { PrismaClient } from "@prisma/client";
 
 function Index({
   landingPage,
@@ -84,6 +85,7 @@ function Index({
           label: mainLink,
         });
         e.preventDefault();
+
         const email = emailInput?.value;
         const name = NameInput?.value;
         handleSumitEmail({ email, name });
@@ -134,12 +136,18 @@ function Index({
         });
 
         if (directLink.status === "rejected") {
-          router.push(mainLink);
+          window.open(mainLink, "_self");
         } else if (directLink.value.status === "success") {
           router.push(directLink.value.location);
         }
+        return;
       } else {
-        window.open(mainLink, "_self");
+        CreateEmailService({
+          email: email,
+          landingPageId: landingPage?.id,
+          name,
+        }),
+          window.open(mainLink, "_self");
       }
     } catch (err) {
       console.log("run", err);
@@ -238,6 +246,7 @@ function Index({
     </>
   );
 }
+const prisma = new PrismaClient();
 
 export default Index;
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
@@ -248,7 +257,6 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     console.log("userIP", userIP);
     const countryResponse = await fetch(`http://ip-api.com/json/${userIP}`);
     const response = await countryResponse?.json();
-    console.log("response", response);
     if (response?.country) {
       country = response?.country;
     }
@@ -266,14 +274,13 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     ? (acceptLanguage.split(",")[0] as Language)
     : ("en" as Language);
   userLanguage = userLanguage?.split("-")[0] as Language;
-  console.log("userLanguage", userLanguage);
 
   try {
     const landingPage = await GetLandingPageService({
-      host,
+      domain: host,
       language: userLanguage,
+      prisma,
     });
-
     const dom = new JSDOM(landingPage.html);
     let updatedHTML: string = landingPage.html;
     const scriptProductionMultipleForm = dom.window.document.querySelector(
