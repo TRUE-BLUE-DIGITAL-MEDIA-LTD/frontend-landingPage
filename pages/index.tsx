@@ -146,15 +146,22 @@ function Index({
           email: email,
           landingPageId: landingPage?.id,
           name,
-        }),
+        });
+        if (email) {
+          const encode_email = btoa(email);
+          const url = new URL(mainLink);
+          url.searchParams.set("sub3", encode_email);
+          const newLink = url.toString();
+          window.open(newLink, "_self");
+        } else {
           window.open(mainLink, "_self");
+        }
       }
     } catch (err) {
       console.log("run", err);
       window.open(mainLink), "_self";
     }
   };
-  console.log("errorMessage", errorMessage);
   if (errorMessage) {
     return (
       <div className="w-screen h-screen bg-black font-Anuphan">
@@ -178,7 +185,6 @@ function Index({
   if (!landingPage.id) {
     return (
       <>
-        {" "}
         <Head>
           {/* facebook sharing link */}
           <meta property="og:title" content={landingPage.domain.name} />
