@@ -4,10 +4,11 @@ const prisma = new PrismaClient();
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<Customer>
+  res: NextApiResponse<any>
 ) {
   try {
     const body = req.body;
+
     if (req.method === "POST") {
       if (!body.email || !body.landingPageId) {
         res.status(400);

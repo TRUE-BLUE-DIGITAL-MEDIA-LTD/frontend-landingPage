@@ -1,4 +1,4 @@
-import { CreateEmailService } from "@/services/email";
+import { CreateEmailService, ValidateEmail } from "@/services/email";
 import {
   GetLandingPageService,
   ResponseGetLandingPageService,
@@ -36,9 +36,6 @@ function Index({
 
     const emailInput: HTMLInputElement = document.querySelector(
       'input[type="email"][name="email"]'
-    );
-    const NameInput: HTMLInputElement = document.querySelector(
-      'input[type="text"][name="name"]'
     );
 
     const buttons = document.querySelectorAll("button");
@@ -79,34 +76,32 @@ function Index({
     });
 
     submitButtons.forEach((button) => {
-      button.addEventListener("click", function (e) {
-        event("click", {
-          category: "button-click",
-          label: mainLink,
-        });
+      button.addEventListener("click", async function (e) {
         e.preventDefault();
-
-        const email = emailInput?.value;
-        const name = NameInput?.value;
-        handleSumitEmail({ email, name });
+        emailInput.reportValidity();
+        if (emailInput.value) {
+          button.textContent = "Loading..";
+          const validate = await ValidateEmail({ email: emailInput.value });
+          if (validate === true) {
+            event("click", {
+              category: "button-click",
+              label: mainLink,
+            });
+            const email = emailInput.value;
+            await handleSumitEmail({ email });
+          } else if (validate === false) {
+            button.textContent = "Please Enter Valid Email";
+          }
+        }
       });
     });
   };
-  useEffect(() => {
-    // const body = document.getElementById("u_body");
-    // if (body) {
-    //   body.style.display = "flex";
-    //   body.style.alignItems = "center";
-    //   body.style.justifyContent = "center";
-    //   body.style.gap = "0.75rem";
-    // } else {
-    //   console.log('Element with id "u_body" not found.');
-    // }
 
+  useEffect(() => {
     preventDefaultForSubmitButtons();
   }, []);
 
-  const handleSumitEmail = async ({ email, name }) => {
+  const handleSumitEmail = async ({ email }: { email: string }) => {
     try {
       Swal.fire({
         title: "Thanks For Joining us",
@@ -126,7 +121,6 @@ function Index({
           CreateEmailService({
             email: email,
             landingPageId: landingPage?.id,
-            name,
           }),
         ]);
         Swal.fire({
@@ -142,10 +136,9 @@ function Index({
         }
         return;
       } else {
-        CreateEmailService({
+        await CreateEmailService({
           email: email,
           landingPageId: landingPage?.id,
-          name,
         });
         if (email) {
           const encode_email = btoa(email);

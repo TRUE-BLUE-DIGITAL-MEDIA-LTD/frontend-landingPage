@@ -7,7 +7,7 @@ export async function CreateEmailService({
 }: {
   email: string;
   landingPageId: string;
-  name: string;
+  name?: string;
 }) {
   try {
     const res = await axios.post(
@@ -16,6 +16,26 @@ export async function CreateEmailService({
         email,
         name,
         landingPageId,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return res.data;
+  } catch (err) {
+    console.log(err);
+    throw err.response.data;
+  }
+}
+
+export async function ValidateEmail({ email }: { email: string }) {
+  try {
+    const res = await axios.post(
+      "api/v1/customers/validate",
+      {
+        email,
       },
       {
         headers: {
