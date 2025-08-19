@@ -1,6 +1,5 @@
-import { Customer, PrismaClient } from "@prisma/client";
 import type { NextApiRequest, NextApiResponse } from "next";
-
+import NeverBounce from "neverbounce";
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<boolean>
@@ -42,15 +41,24 @@ export async function IsEmailValid(email: string) {
 
   // 3. Check for MX records on the domain.
   try {
-    const addresses = await resolveMx(domain);
-    console.log(addresses);
-    // If MX records are found, the domain is configured to receive mail.
-    if (addresses && addresses.length > 0) {
+    const address = await resolveMx(domain);
+    if (!address || address.length === 0) {
+      return false;
+    }
+    const client = new NeverBounce({
+      apiKey: process.env.NEVERBOUNCE_API_KEY,
+    });
+
+    const check = await client.single.check(email);
+
+    if (check.getResult() === "valid") {
       return true;
+    } else {
+      return false;
     }
   } catch (error) {
     // If there's an error (e.g., domain not found - ENOTFOUND), it's invalid.
-    console.error(`DNS lookup failed for domain ${domain}:`, error.code);
+    console.error(`DNS lookup failed for domain ${domain}:`, error.to);
     return false;
   }
 

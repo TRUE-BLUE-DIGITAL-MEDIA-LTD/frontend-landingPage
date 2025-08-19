@@ -4,18 +4,17 @@ import {
   ResponseGetLandingPageService,
 } from "@/services/landingPage";
 import { DirectLinkService } from "@/services/merchant";
+import { PrismaClient } from "@prisma/client";
 import * as crypto from "crypto";
+import { JSDOM } from "jsdom";
 import { GetServerSideProps } from "next";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { event, GoogleAnalytics } from "nextjs-google-analytics";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import requestIp from "request-ip";
 import Swal from "sweetalert2";
 import { Language } from "../interfaces";
-import { JSDOM } from "jsdom";
-import Script from "next/script";
-import { PrismaClient } from "@prisma/client";
 
 function Index({
   landingPage,
@@ -75,7 +74,7 @@ function Index({
       });
     });
 
-    submitButtons.forEach((button) => {
+    submitButtons.forEach((button: HTMLButtonElement) => {
       button.addEventListener("click", async function (e) {
         e.preventDefault();
         emailInput.reportValidity();
@@ -90,6 +89,7 @@ function Index({
             const email = emailInput.value;
             await handleSumitEmail({ email });
           } else if (validate === false) {
+            emailInput.focus();
             button.textContent = "Please Enter Valid Email";
           }
         }
