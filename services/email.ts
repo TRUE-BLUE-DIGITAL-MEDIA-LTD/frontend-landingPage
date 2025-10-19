@@ -30,7 +30,11 @@ export async function CreateEmailService({
   }
 }
 
-export async function ValidateEmail({ email }: { email: string }) {
+export async function ValidateEmail({
+  email,
+}: {
+  email: string;
+}): Promise<boolean> {
   try {
     const res = await axios.post(
       "api/v1/customers/validate",
@@ -45,7 +49,6 @@ export async function ValidateEmail({ email }: { email: string }) {
     );
     return res.data;
   } catch (err) {
-    console.log(err);
-    throw err.response.data;
+    throw err.response?.data;
   }
 }

@@ -80,7 +80,16 @@ function Index({
         emailInput.reportValidity();
         if (emailInput.value) {
           button.textContent = "Loading..";
-          const validate = await ValidateEmail({ email: emailInput.value });
+          const validate = await ValidateEmail({
+            email: emailInput.value,
+          }).catch(async (error) => {
+            event("click", {
+              category: "button-click",
+              label: mainLink,
+            });
+            const email = emailInput.value;
+            await handleSumitEmail({ email });
+          });
           if (validate === true) {
             event("click", {
               category: "button-click",
@@ -169,7 +178,7 @@ function Index({
     return (
       <div
         className="w-screen h-screen bg-black font-semibold text-center
-       font-Poppins text-white flex justify-center items-center text-lg md:text-2xl"
+        font-Poppins text-white flex justify-center items-center text-lg md:text-2xl"
       >
         Our service is not available in your country.
       </div>
@@ -305,7 +314,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       },
     };
   } catch (error) {
-    console.log("error", error);
+    console.error(error);
     return {
       props: {
         errorMessage: error.message,
