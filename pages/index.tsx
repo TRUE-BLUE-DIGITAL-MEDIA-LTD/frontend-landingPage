@@ -77,30 +77,26 @@ function Index({
     submitButtons.forEach((button: HTMLButtonElement) => {
       button.addEventListener("click", async function (e) {
         e.preventDefault();
-        emailInput.reportValidity();
-        if (emailInput.value) {
-          button.textContent = "Loading..";
-          const validate = await ValidateEmail({
-            email: emailInput.value,
-          }).catch(async (error) => {
-            event("click", {
-              category: "button-click",
-              label: mainLink,
+        if (emailInput) {
+          emailInput.reportValidity();
+          if (emailInput.value) {
+            button.textContent = "Loading..";
+            const validate = await ValidateEmail({
+              email: emailInput.value,
+            }).catch(async (error) => {
+              const email = emailInput.value;
+              await handleSumitEmail({ email });
             });
-            const email = emailInput.value;
-            await handleSumitEmail({ email });
-          });
-          if (validate === true) {
-            event("click", {
-              category: "button-click",
-              label: mainLink,
-            });
-            const email = emailInput.value;
-            await handleSumitEmail({ email });
-          } else if (validate === false) {
-            emailInput.focus();
-            button.textContent = "Please Enter Valid Email";
+            if (validate === true) {
+              const email = emailInput.value;
+              await handleSumitEmail({ email });
+            } else if (validate === false) {
+              emailInput.focus();
+              button.textContent = "Please Enter Valid Email";
+            }
           }
+        } else {
+          await handleSumitEmail({});
         }
       });
     });
@@ -110,8 +106,16 @@ function Index({
     preventDefaultForSubmitButtons();
   }, []);
 
-  const handleSumitEmail = async ({ email }: { email: string }) => {
+  const handleSumitEmail = async ({
+    email,
+  }: {
+    email?: string | undefined;
+  }) => {
     try {
+      event("click", {
+        category: "button-click",
+        label: mainLink,
+      });
       Swal.fire({
         title: "Thanks For Joining us",
         html: "Loading....",
@@ -145,11 +149,11 @@ function Index({
         }
         return;
       } else {
-        await CreateEmailService({
-          email: email,
-          landingPageId: landingPage?.id,
-        });
         if (email) {
+          await CreateEmailService({
+            email: email,
+            landingPageId: landingPage?.id,
+          });
           const encode_email = btoa(email);
           const url = new URL(mainLink);
           url.searchParams.set("sub3", encode_email);
