@@ -1,5 +1,5 @@
 {
-  "name": "nudeshag",
+  "name": "oxyclick-landing-page",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -13,7 +13,7 @@
     "axios": "^1.5.1",
     "jsdom": "^26.1.0",
     "neverbounce": "^5.0.5",
-    "next": "^15.0.0",
+    "next": "15.0.7",
     "nextjs-google-analytics": "^2.3.7",
     "npm": "^10.8.3",
     "react": "^18.3.1",
