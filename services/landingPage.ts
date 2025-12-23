@@ -27,6 +27,7 @@ export async function GetLandingPageService(dto: {
       name: string;
       title: string;
       description: string;
+      language: string;
       backgroundImage: string;
       backOffer: string;
       secondOffer: string;
@@ -39,65 +40,42 @@ export async function GetLandingPageService(dto: {
       route: string;
     }[];
 
-    landingPages = await dto.prisma.landingPage
-      .findMany({
-        where: {
-          domainId: domain.id,
-          language: dto.language,
-        },
-        select: {
-          id: true,
-          directLink: true,
-          backgroundImage: true,
-          description: true,
-          html: true,
-          language: true,
-          mainButton: true,
-          title: true,
-          percent: true,
-          icon: true,
-          name: true,
-          backOffer: true,
-          secondOffer: true,
-          route: true,
-        },
-      })
-      .then((res) => {
-        return dto.route
-          ? res.filter((r) => r.route === dto.route)
-          : res.filter((r) => !r.route);
-      });
+    landingPages = await dto.prisma.landingPage.findMany({
+      where: {
+        domainId: domain.id,
+      },
+      select: {
+        id: true,
+        directLink: true,
+        backgroundImage: true,
+        description: true,
+        html: true,
+        language: true,
+        mainButton: true,
+        title: true,
+        percent: true,
+        icon: true,
+        name: true,
+        backOffer: true,
+        secondOffer: true,
+        route: true,
+      },
+    });
 
-    // If landingPages is empty and language is es, fr, or de, fetch en landingPage
-    if (landingPages.length === 0) {
-      landingPages = await dto.prisma.landingPage
-        .findMany({
-          where: {
-            domainId: domain.id,
-            language: "en",
-          },
-          select: {
-            id: true,
-            directLink: true,
-            backgroundImage: true,
-            description: true,
-            html: true,
-            mainButton: true,
-            title: true,
-            percent: true,
-            language: true,
-            route: true,
-            icon: true,
-            name: true,
-            backOffer: true,
-            secondOffer: true,
-          },
-        })
-        .then((res) => {
-          return dto.route
-            ? res.filter((r) => r.route === dto.route)
-            : res.filter((r) => !r.route);
-        });
+    landingPages = dto.route
+      ? landingPages.filter((r) => r.route === dto.route)
+      : landingPages.filter((r) => !r.route);
+
+    landingPages = landingPages.filter((lp) => lp.percent > 0);
+
+    if (dto.language !== "en") {
+      const checkLanguages = landingPages.filter(
+        (lp) => lp.language === dto.language
+      );
+
+      if (checkLanguages.length !== 0) {
+        landingPages = checkLanguages;
+      }
     }
 
     let totalRate = 0;
@@ -122,7 +100,9 @@ export async function GetLandingPageService(dto: {
         }
       }
     }
+
     const randomLandingPage = chooseWeighted(landignPagesWithlastCoef);
+
     return { ...randomLandingPage, domain };
   } catch (error) {
     throw error;
