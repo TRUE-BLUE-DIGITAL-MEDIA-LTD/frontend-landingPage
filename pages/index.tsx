@@ -164,7 +164,6 @@ function Index({
         }
       }
     } catch (err) {
-      console.log("run", err);
       window.open(mainLink), "_self";
     }
   };
@@ -266,7 +265,6 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   let country = "United States";
   try {
     const userIP = requestIp.getClientIp(ctx.req);
-    console.log("userIP", userIP);
     const countryResponse = await fetch(`http://ip-api.com/json/${userIP}`);
     const response = await countryResponse?.json();
     if (response?.country) {

@@ -68,14 +68,12 @@ export async function GetLandingPageService(dto: {
 
     landingPages = landingPages.filter((lp) => lp.percent > 0);
 
-    if (dto.language !== "en") {
-      const checkLanguages = landingPages.filter(
-        (lp) => lp.language === dto.language
-      );
+    const checkLanguages = landingPages.filter(
+      (lp) => lp.language === dto.language
+    );
 
-      if (checkLanguages.length !== 0) {
-        landingPages = checkLanguages;
-      }
+    if (checkLanguages.length !== 0) {
+      landingPages = checkLanguages;
     }
 
     let totalRate = 0;
