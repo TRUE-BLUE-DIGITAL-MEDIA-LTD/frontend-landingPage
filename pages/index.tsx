@@ -280,15 +280,27 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     host = ctx.req.headers.host;
   }
   const acceptLanguage = ctx.req.headers["accept-language"];
-  let userLanguage: Language = acceptLanguage
-    ? (acceptLanguage.split(",")[0] as Language)
-    : ("en" as Language);
-  userLanguage = userLanguage?.split("-")[0] as Language;
+  console.log("acceptLanguage", acceptLanguage);
+  // 1. Default to 'en'
+  let userLanguage = "en";
+
+  if (acceptLanguage) {
+    // 2. Get the first preferred language (e.g., "en-US" or "en;q=0.9")
+    const firstLanguage = acceptLanguage.split(",")[0];
+
+    // 3. Split by ';' to remove quality weights (e.g., "en;q=0.9" -> ["en", "q=0.9"])
+    // 4. Split by '-' to get the base language (e.g., "en-US" -> ["en", "US"])
+    userLanguage = firstLanguage.split(";")[0].split("-")[0].toLowerCase();
+  }
+
+  // Ensure it matches your Language type/enum
+  const finalLanguage = userLanguage as Language;
+  console.log("finalLanguage", finalLanguage);
 
   try {
     const landingPage = await GetLandingPageService({
       domain: host,
-      language: userLanguage,
+      language: finalLanguage,
       prisma,
     });
     const dom = new JSDOM(landingPage.html);
