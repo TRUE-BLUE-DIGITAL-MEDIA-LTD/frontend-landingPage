@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import NeverBounce from "neverbounce";
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<boolean>
+  res: NextApiResponse<boolean>,
 ) {
   try {
     const body = req.body;
@@ -50,18 +50,12 @@ export async function IsEmailValid(email: string) {
     });
 
     const check = await client.single.check(email);
-
     if (check.getResult() === "valid") {
       return true;
     } else {
       return false;
     }
-  } catch (error) {
-    // If there's an error (e.g., domain not found - ENOTFOUND), it's invalid.
-    console.error(`DNS lookup failed for domain ${domain}:`, error.to);
-    return false;
+  } catch (error: unknown) {
+    return true;
   }
-
-  // If no MX records are found, it's considered invalid.
-  return false;
 }
