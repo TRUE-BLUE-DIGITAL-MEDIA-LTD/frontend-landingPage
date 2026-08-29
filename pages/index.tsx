@@ -17,6 +17,8 @@ import Swal from "sweetalert2";
 import { Language } from "../interfaces";
 import { initLanderTracking, LanderTracker } from "@/services/tracking";
 import { isMainTarget } from "@/services/main-target";
+import { isNewTabAnchor } from "@/services/new-tab";
+import { countryFromIp } from "../server/geo";
 
 function Index({
   landingPage,
@@ -44,10 +46,14 @@ function Index({
     );
 
     const buttons = document.querySelectorAll("button");
-    const multipleFormButtons = Array.from(buttons).filter((button) =>
-      Array.from(button.classList).some((className) =>
-        className.includes("form"),
-      ),
+    const multipleFormButtons = Array.from(buttons).filter(
+      (button) =>
+        // The submission CTA is owned entirely by the multi-step form
+        // runtime — keep the legacy analytics/preventDefault hook off it.
+        !button.classList.contains("oxy-form-submit-cta") &&
+        Array.from(button.classList).some((className) =>
+          className.includes("form"),
+        ),
     );
     if (multipleFormButtons.length > 0) {
       multipleFormButtons.forEach((button) => {
@@ -62,9 +68,20 @@ function Index({
           const ownStep = button.closest(".form_step");
           trackerRef.current?.trackStep(ownStep?.id || classId[0], text);
           // Runtime redirects to the offer on the last form_step's button — the conversion.
-          if (formSteps.length > 0 && ownStep === formSteps[formSteps.length - 1]) {
+          if (
+            formSteps.length > 0 &&
+            ownStep === formSteps[formSteps.length - 1]
+          ) {
             let url: string | undefined;
-            try { url = (JSON.parse(button.getAttribute("value") ?? "{}") as { url?: string }).url; } catch { /* value attr is runtime-owned; absence is fine */ }
+            try {
+              url = (
+                JSON.parse(button.getAttribute("value") ?? "{}") as {
+                  url?: string;
+                }
+              ).url;
+            } catch {
+              /* value attr is runtime-owned; absence is fine */
+            }
             trackerRef.current?.trackClick(url || mainLink);
           }
           e.preventDefault();
@@ -88,6 +105,12 @@ function Index({
           trackerRef.current?.trackClick(href);
         } else {
           trackerRef.current?.trackLink(href);
+        }
+        // New-tab links (e.g. the consent row's privacy-policy link) keep
+        // native navigation — hijacking them into router.push() would
+        // replace the lander and destroy multi-step form progress.
+        if (isNewTabAnchor(button.target)) {
+          return;
         }
         router.push(href);
         e.preventDefault();
@@ -157,12 +180,20 @@ function Index({
         category: "quiz-step",
         label: d?.label ?? d?.value ?? "",
       });
-      trackerRef.current?.trackStep(d?.stepId ?? "quiz_step", d?.label ?? d?.value ?? null);
+      trackerRef.current?.trackStep(
+        d?.stepId ?? "quiz_step",
+        d?.label ?? d?.value ?? null,
+      );
     };
     const onQuizComplete = (e: Event) => {
       e.preventDefault();
       const d = (e as CustomEvent).detail as
-        | { answers?: Record<string, string>; email?: string; redirectUrl?: string; appendAnswers?: boolean }
+        | {
+            answers?: Record<string, string>;
+            email?: string;
+            redirectUrl?: string;
+            appendAnswers?: boolean;
+          }
         | undefined;
       void handleQuizComplete(d ?? {});
     };
@@ -303,7 +334,10 @@ function Index({
           return;
         }
       }
-      window.open(appendQuizParams(base, answers, email, appendAnswers !== false), "_self");
+      window.open(
+        appendQuizParams(base, answers, email, appendAnswers !== false),
+        "_self",
+      );
     } catch (err) {
       window.open(base, "_self");
     }
@@ -412,17 +446,9 @@ const prisma = new PrismaClient();
 export default Index;
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   let host = ctx.req.headers.host;
-  let country = "United States";
-  try {
-    const userIP = requestIp.getClientIp(ctx.req);
-    const countryResponse = await fetch(`http://ip-api.com/json/${userIP}`);
-    const response = await countryResponse?.json();
-    if (response?.country) {
-      country = response?.country;
-    }
-  } catch (error) {
-    console.log("error", error);
-  }
+  // Analytics keeps its historical default when the lookup fails.
+  const country =
+    (await countryFromIp(requestIp.getClientIp(ctx.req))) ?? "United States";
 
   if (process.env.NEXT_PUBLIC_NODE_ENV === "development") {
     host = "localhost:8181";
@@ -455,9 +481,8 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       landingPage.language) as Language;
     const finalLanguage = pickLanguage(acceptLanguage, supported, primary);
 
-    const { resolveVisitor, buildVisitorCookie, VISITOR_COOKIE } = await import(
-      "../server/analytics/visitor-cookie"
-    );
+    const { resolveVisitor, buildVisitorCookie, VISITOR_COOKIE } =
+      await import("../server/analytics/visitor-cookie");
     const visitor = resolveVisitor(ctx.req.cookies?.[VISITOR_COOKIE]);
     if (!visitor.isReturning) {
       try {
@@ -473,9 +498,8 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       }
     }
 
-    const { recordLanderView } = await import(
-      "../server/analytics/record-view"
-    );
+    const { recordLanderView } =
+      await import("../server/analytics/record-view");
     const trackSessionId =
       landingPage?.id && country !== "Thailand"
         ? await recordLanderView({
@@ -493,9 +517,8 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 
     const dom = new JSDOM(landingPage.html);
 
-    const { stripParityScripts } = await import(
-      "../server/render/strip-parity-scripts"
-    );
+    const { stripParityScripts } =
+      await import("../server/render/strip-parity-scripts");
     stripParityScripts(dom.window.document, host);
 
     // NEW: i18n substitution
@@ -507,6 +530,13 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       finalLanguage,
       primary,
     );
+
+    const { stampMultipleFormMeta } =
+      await import("../server/render/stamp-multiple-form");
+    stampMultipleFormMeta(dom.window.document, {
+      landingPageId: landingPage.id,
+      fallbackLink: landingPage.mainButton ?? "",
+    });
 
     // Serialize ONCE at the end
     const updatedHTML: string = dom.serialize();
