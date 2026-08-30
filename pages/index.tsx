@@ -18,6 +18,7 @@ import { Language } from "../interfaces";
 import { initLanderTracking, LanderTracker } from "@/services/tracking";
 import { isMainTarget } from "@/services/main-target";
 import { isNewTabAnchor } from "@/services/new-tab";
+import { resolveSelfAnchorToMainLink } from "@/services/main-cta";
 import { countryFromIp } from "../server/geo";
 
 function Index({
@@ -91,11 +92,11 @@ function Index({
 
     const anchorTags = document.querySelectorAll("a");
     anchorTags.forEach((button) => {
-      let href = button.href;
-
-      if (href === window.location.href) {
-        href = mainLink;
-      }
+      const href = resolveSelfAnchorToMainLink(
+        button,
+        window.location.href,
+        mainLink,
+      );
       button.addEventListener("click", function (e) {
         event("click", {
           category: "button-click",
