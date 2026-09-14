@@ -2,7 +2,10 @@ import { PrismaClient } from "@prisma/client";
 import type { NextApiRequest, NextApiResponse } from "next";
 import requestIp from "request-ip";
 import { sanitizeFormAnswers } from "../../../../server/customers/form-answers";
-import { countryFromIp } from "../../../../server/geo";
+import {
+  countryFromNetlifyHeader,
+  NETLIFY_GEO_HEADER,
+} from "../../../../server/geo";
 
 const prisma = new PrismaClient();
 
@@ -32,8 +35,8 @@ export default async function handler(
     }
 
     const ip = requestIp.getClientIp(req) ?? undefined;
-    // Best-effort: undefined on any lookup failure, never blocks the submit.
-    const country = await countryFromIp(ip);
+    // Best-effort: undefined when the geo header is absent or malformed.
+    const country = countryFromNetlifyHeader(req.headers[NETLIFY_GEO_HEADER]);
 
     const customer = await prisma.customer.create({
       data: {

@@ -1,34 +1,62 @@
-const GEO_TIMEOUT_MS = 2000;
+export const NETLIFY_GEO_HEADER = "x-nf-geo";
 
-/**
- * Resolve an IP to a full country name (e.g. "Thailand") via ip-api.com —
- * the same source/format the analytics LanderSession already stores.
- * Best-effort: any failure (missing IP, timeout, network error, non-OK
- * status, rate limit, private/reserved IP "fail" payload) yields undefined.
- * Never throws — a geo lookup must never block or fail the caller.
- */
-export async function countryFromIp(
-  ip: string | null | undefined,
-): Promise<string | undefined> {
-  if (!ip) return undefined;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), GEO_TIMEOUT_MS);
+interface NetlifyGeoPayload {
+  country?: { code?: string; name?: string };
+}
+
+// Country names must stay aligned with the historical ip-api.com values
+// already stored in analytics ("United States", "Thailand", ...), so the
+// ISO code is resolved through Intl.DisplayNames rather than trusting the
+// header's own name field.
+const REGION_NAMES = (() => {
   try {
-    const res = await fetch(`http://ip-api.com/json/${ip}`, {
-      signal: controller.signal,
-    });
-    if (!res.ok) return undefined;
-    const data = (await res.json()) as {
-      status?: string;
-      country?: string;
-    };
-    if (data?.status === "fail") return undefined;
-    return typeof data?.country === "string" && data.country !== ""
-      ? data.country
-      : undefined;
+    return new Intl.DisplayNames(["en"], { type: "region" });
   } catch {
     return undefined;
-  } finally {
-    clearTimeout(timer);
   }
+})();
+
+function decodeGeoPayload(raw: string): NetlifyGeoPayload | undefined {
+  // Netlify sends the header base64-encoded; local dev tooling may pass
+  // plain JSON. Try base64 first, then fall back to direct parsing.
+  try {
+    const decoded = Buffer.from(raw, "base64").toString("utf8");
+    const parsed = JSON.parse(decoded);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {
+    /* fall through to plain JSON */
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {
+    /* not geo data */
+  }
+  return undefined;
+}
+
+/**
+ * Resolve the visitor's full country name (e.g. "Thailand") from Netlify's
+ * x-nf-geo request header (base64-encoded JSON injected by the platform on
+ * every function invocation). Best-effort: any missing or malformed value
+ * yields undefined. Never throws — a geo lookup must never fail the caller.
+ */
+export function countryFromNetlifyHeader(
+  headerValue: string | string[] | undefined,
+): string | undefined {
+  const raw = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  if (!raw) return undefined;
+  const geo = decodeGeoPayload(raw);
+  const code = geo?.country?.code;
+  if (typeof code === "string" && /^[a-z]{2}$/i.test(code)) {
+    try {
+      const name = REGION_NAMES?.of(code.toUpperCase());
+      // DisplayNames echoes the code back when it has no name for it.
+      if (name && name !== code.toUpperCase()) return name;
+    } catch {
+      /* invalid region code — fall back to the payload name */
+    }
+  }
+  const name = geo?.country?.name;
+  return typeof name === "string" && name !== "" ? name : undefined;
 }

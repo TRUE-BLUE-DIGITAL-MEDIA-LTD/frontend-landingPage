@@ -1,86 +1,65 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { countryFromIp } from "./geo";
+import { describe, expect, it } from "vitest";
+import { countryFromNetlifyHeader } from "./geo";
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
-});
-
-function okJson(payload: unknown) {
-  return {
-    ok: true,
-    json: async () => payload,
-  };
+function encode(payload: unknown): string {
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
 }
 
-describe("countryFromIp", () => {
-  it("returns the country name on success", async () => {
-    const fetchMock = vi.fn(async () =>
-      okJson({ status: "success", country: "Thailand" }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    await expect(countryFromIp("1.2.3.4")).resolves.toBe("Thailand");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://ip-api.com/json/1.2.3.4",
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-  });
-
-  it("returns undefined without fetching when the ip is missing", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    await expect(countryFromIp(null)).resolves.toBeUndefined();
-    await expect(countryFromIp(undefined)).resolves.toBeUndefined();
-    await expect(countryFromIp("")).resolves.toBeUndefined();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("returns undefined on a non-OK response", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: false, json: async () => ({}) })),
-    );
-    await expect(countryFromIp("1.2.3.4")).resolves.toBeUndefined();
-  });
-
-  it("returns undefined on an ip-api 'fail' payload (private/reserved IP)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => okJson({ status: "fail", message: "private range" })),
-    );
-    await expect(countryFromIp("192.168.1.10")).resolves.toBeUndefined();
-  });
-
-  it("returns undefined when country is missing from a success payload", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => okJson({ status: "success" })));
-    await expect(countryFromIp("1.2.3.4")).resolves.toBeUndefined();
-  });
-
-  it("returns undefined when fetch rejects", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new Error("network down");
-      }),
-    );
-    await expect(countryFromIp("1.2.3.4")).resolves.toBeUndefined();
-  });
-
-  it("aborts and returns undefined after the 2s timeout", async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        (_url: string, opts: { signal: AbortSignal }) =>
-          new Promise((_resolve, reject) => {
-            opts.signal.addEventListener("abort", () =>
-              reject(new Error("aborted")),
-            );
-          }),
+describe("countryFromNetlifyHeader", () => {
+  it("resolves the country name from a base64 x-nf-geo payload", () => {
+    expect(
+      countryFromNetlifyHeader(
+        encode({ country: { code: "TH", name: "Thailand" } }),
       ),
-    );
-    const pending = countryFromIp("1.2.3.4");
-    await vi.advanceTimersByTimeAsync(2001);
-    await expect(pending).resolves.toBeUndefined();
+    ).toBe("Thailand");
+    expect(
+      countryFromNetlifyHeader(
+        encode({ country: { code: "US", name: "United States of America" } }),
+      ),
+    ).toBe("United States");
+  });
+
+  it("prefers the ISO code over the payload name for naming consistency", () => {
+    // Header name variants must not fragment analytics country values.
+    expect(
+      countryFromNetlifyHeader(
+        encode({ country: { code: "GB", name: "Britain" } }),
+      ),
+    ).toBe("United Kingdom");
+  });
+
+  it("falls back to the payload name when the code is missing or invalid", () => {
+    expect(
+      countryFromNetlifyHeader(encode({ country: { name: "Thailand" } })),
+    ).toBe("Thailand");
+    expect(
+      countryFromNetlifyHeader(
+        encode({ country: { code: "XXX", name: "Somewhere" } }),
+      ),
+    ).toBe("Somewhere");
+  });
+
+  it("accepts a plain-JSON (unencoded) header value", () => {
+    expect(
+      countryFromNetlifyHeader(JSON.stringify({ country: { code: "TH" } })),
+    ).toBe("Thailand");
+  });
+
+  it("uses the first value of a repeated header", () => {
+    expect(
+      countryFromNetlifyHeader([
+        encode({ country: { code: "TH" } }),
+        encode({ country: { code: "US" } }),
+      ]),
+    ).toBe("Thailand");
+  });
+
+  it("returns undefined for missing or malformed values", () => {
+    expect(countryFromNetlifyHeader(undefined)).toBeUndefined();
+    expect(countryFromNetlifyHeader("")).toBeUndefined();
+    expect(countryFromNetlifyHeader("not-base64-json")).toBeUndefined();
+    expect(countryFromNetlifyHeader(encode({}))).toBeUndefined();
+    expect(countryFromNetlifyHeader(encode({ country: {} }))).toBeUndefined();
+    expect(countryFromNetlifyHeader(encode("just a string"))).toBeUndefined();
   });
 });

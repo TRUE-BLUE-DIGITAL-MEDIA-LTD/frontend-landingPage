@@ -1,9 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import { Domain, LandingPage, Language } from "../interfaces";
+import { pickLander } from "./pick-lander";
 
 export type ResponseGetLandingPageService = (LandingPage | undefined) & {
   domain: Domain;
 };
+
 export async function GetLandingPageService(dto: {
   domain: string;
   language: Language;
@@ -22,31 +24,37 @@ export async function GetLandingPageService(dto: {
     }
     delete domain.createAt;
     delete domain.updateAt;
-    let landingPages: {
-      id: string;
-      name: string;
-      title: string;
-      description: string;
-      language: string;
-      primaryLanguage: string | null;
-      supportedLanguages: string[];
-      translations: any;
-      backgroundImage: string;
-      backOffer: string;
-      secondOffer: string;
-      icon: string;
-      html: string;
-      mainButton: string;
-      directLink: string;
-      percent: number;
-      coef?: number;
-      route: string;
-    }[];
 
-    landingPages = await dto.prisma.landingPage.findMany({
+    // Two-phase fetch: weigh the A/B pick on metadata only, then pull the
+    // heavy fields (html, translations, ...) for the single winner. A domain
+    // can hold many landers and their html is large — fetching them all per
+    // request was the bulk of the DB payload.
+    const candidates = await dto.prisma.landingPage.findMany({
       where: {
         domainId: domain.id,
       },
+      select: {
+        id: true,
+        percent: true,
+        route: true,
+        supportedLanguages: true,
+        language: true,
+      },
+    });
+
+    const picked = pickLander(candidates, {
+      route: dto.route,
+      language: dto.language,
+    });
+
+    if (!picked) {
+      // Same shape the pre-split code produced when no lander matched:
+      // only the domain, so the page renders its "no landing page" view.
+      return { domain } as unknown as ResponseGetLandingPageService;
+    }
+
+    const landingPage = await dto.prisma.landingPage.findUnique({
+      where: { id: picked.id },
       select: {
         id: true,
         directLink: true,
@@ -68,49 +76,7 @@ export async function GetLandingPageService(dto: {
       },
     });
 
-    landingPages = dto.route
-      ? landingPages.filter((r) => r.route === dto.route)
-      : landingPages.filter((r) => !r.route);
-
-    landingPages = landingPages.filter((lp) => lp.percent > 0);
-
-    const checkLanguages = landingPages.filter((lp) => {
-      const supported = lp.supportedLanguages ?? [];
-      if (supported.length > 0) return supported.includes(dto.language);
-      // Pre-migration row with no supportedLanguages: keep the legacy match.
-      return lp.language === dto.language;
-    });
-
-    if (checkLanguages.length !== 0) {
-      landingPages = checkLanguages;
-    }
-
-    let totalRate = 0;
-    for (const landingPage of landingPages) {
-      totalRate += landingPage.percent;
-    }
-
-    let lastCoef = 0;
-    const landignPagesWithlastCoef = [];
-    for (let landingPage of landingPages) {
-      const coef = lastCoef + landingPage.percent / totalRate;
-      landingPage = { ...landingPage, coef };
-      lastCoef = landingPage.coef;
-      landignPagesWithlastCoef.push(landingPage);
-    }
-
-    function chooseWeighted(landingPages: (LandingPage & { coef?: number })[]) {
-      const randomNum = Math.random();
-      for (const landingPage of landingPages) {
-        if (randomNum < landingPage.coef) {
-          return landingPage;
-        }
-      }
-    }
-
-    const randomLandingPage = chooseWeighted(landignPagesWithlastCoef);
-
-    return { ...randomLandingPage, domain };
+    return { ...landingPage, domain } as unknown as ResponseGetLandingPageService;
   } catch (error) {
     throw error;
   }

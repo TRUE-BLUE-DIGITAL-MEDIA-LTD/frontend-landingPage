@@ -14,6 +14,37 @@ const noop: LanderTracker = {
   destroy() {},
 };
 
+/**
+ * Beacon that creates the LanderSession server-side (POST /api/view) and
+ * returns its sessionId. The page no longer records the view during SSR, so
+ * this runs on mount. Best-effort: null on any failure — tracking must never
+ * break the lander.
+ */
+export async function createLanderSession(opts: {
+  landingPageId: string;
+}): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const res = await fetch("/api/view", {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        landingPageId: opts.landingPageId,
+        referrer: document.referrer || null,
+        search: window.location.search || null,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json().catch(() => null)) as {
+      sessionId?: unknown;
+    } | null;
+    return typeof data?.sessionId === "string" ? data.sessionId : null;
+  } catch {
+    return null;
+  }
+}
+
 export function initLanderTracking(opts: {
   sessionId: string;
 }): LanderTracker {

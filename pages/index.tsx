@@ -12,14 +12,20 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { event, GoogleAnalytics } from "nextjs-google-analytics";
 import { useEffect, useRef } from "react";
-import requestIp from "request-ip";
 import Swal from "sweetalert2";
 import { Language } from "../interfaces";
-import { initLanderTracking, LanderTracker } from "@/services/tracking";
+import {
+  createLanderSession,
+  initLanderTracking,
+  LanderTracker,
+} from "@/services/tracking";
 import { isMainTarget } from "@/services/main-target";
 import { isNewTabAnchor } from "@/services/new-tab";
 import { resolveSelfAnchorToMainLink } from "@/services/main-cta";
-import { countryFromIp } from "../server/geo";
+import {
+  countryFromNetlifyHeader,
+  NETLIFY_GEO_HEADER,
+} from "../server/geo";
 
 function Index({
   landingPage,
@@ -27,14 +33,12 @@ function Index({
   country,
   updatedHTML,
   finalLanguage,
-  trackSessionId,
 }: {
   landingPage: ResponseGetLandingPageService;
   errorMessage?: string;
   country: string;
   updatedHTML: string;
   finalLanguage: Language;
-  trackSessionId: string | null;
 }) {
   const router = useRouter();
   const mainLink = landingPage?.mainButton;
@@ -159,11 +163,22 @@ function Index({
 
   const trackerRef = useRef<LanderTracker | null>(null);
   useEffect(() => {
-    if (!trackSessionId || !landingPage?.id) return;
-    const tracker = initLanderTracking({ sessionId: trackSessionId });
-    trackerRef.current = tracker;
+    // The session is created by a client beacon so the SSR render never
+    // waits on an analytics write. Events fired before the beacon resolves
+    // are dropped — the tracker ref stays null until then.
+    if (!landingPage?.id || errorMessage || country === "Thailand") return;
+    let cancelled = false;
+    let tracker: LanderTracker | null = null;
+    void createLanderSession({ landingPageId: landingPage.id }).then(
+      (sessionId) => {
+        if (cancelled || !sessionId) return;
+        tracker = initLanderTracking({ sessionId });
+        trackerRef.current = tracker;
+      },
+    );
     return () => {
-      tracker.destroy();
+      cancelled = true;
+      tracker?.destroy();
       trackerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -447,9 +462,11 @@ const prisma = new PrismaClient();
 export default Index;
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   let host = ctx.req.headers.host;
-  // Analytics keeps its historical default when the lookup fails.
+  // Country comes from Netlify's geo header — no network call, no stall.
+  // Analytics keeps its historical default when the header is absent.
   const country =
-    (await countryFromIp(requestIp.getClientIp(ctx.req))) ?? "United States";
+    countryFromNetlifyHeader(ctx.req.headers[NETLIFY_GEO_HEADER]) ??
+    "United States";
 
   if (process.env.NEXT_PUBLIC_NODE_ENV === "development") {
     host = "localhost:8181";
@@ -482,39 +499,8 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       landingPage.language) as Language;
     const finalLanguage = pickLanguage(acceptLanguage, supported, primary);
 
-    const { resolveVisitor, buildVisitorCookie, VISITOR_COOKIE } =
-      await import("../server/analytics/visitor-cookie");
-    const visitor = resolveVisitor(ctx.req.cookies?.[VISITOR_COOKIE]);
-    if (!visitor.isReturning) {
-      try {
-        ctx.res.setHeader(
-          "Set-Cookie",
-          buildVisitorCookie(
-            visitor.visitorId,
-            process.env.NEXT_PUBLIC_NODE_ENV !== "development",
-          ),
-        );
-      } catch {
-        /* cookie failure must not break the lander */
-      }
-    }
-
-    const { recordLanderView } =
-      await import("../server/analytics/record-view");
-    const trackSessionId =
-      landingPage?.id && country !== "Thailand"
-        ? await recordLanderView({
-            prisma,
-            landingPageId: landingPage.id,
-            domainId: landingPage.domain?.id ?? null,
-            country,
-            userAgent: ctx.req.headers["user-agent"],
-            referrer: ctx.req.headers.referer,
-            query: ctx.query,
-            visitorId: visitor.visitorId,
-            isReturning: visitor.isReturning,
-          })
-        : null;
+    // View recording (and the visitor cookie) moved to the client beacon —
+    // see pages/api/view.ts. The render path no longer writes to the DB.
 
     const dom = new JSDOM(landingPage.html);
 
@@ -548,7 +534,6 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
         landingPage: landingPage ?? null,
         country,
         finalLanguage,
-        trackSessionId: trackSessionId ?? null,
       },
     };
   } catch (error) {
