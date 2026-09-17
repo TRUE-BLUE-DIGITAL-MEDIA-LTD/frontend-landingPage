@@ -1,10 +1,7 @@
 import { CreateEmailService, ValidateEmail } from "@/services/email";
-import {
-  GetLandingPageService,
-  ResponseGetLandingPageService,
-} from "@/services/landingPage";
+import { ResponseGetLandingPageService } from "@/services/landingPage";
+import { GetLandingPageFromBlob, LANDER_VERSION_HEADER } from "@/services/landerBlob";
 import { DirectLinkService } from "@/services/merchant";
-import { PrismaClient } from "@prisma/client";
 import * as crypto from "crypto";
 import { JSDOM } from "jsdom";
 import { GetServerSideProps } from "next";
@@ -457,8 +454,6 @@ function Index({
     </>
   );
 }
-const prisma = new PrismaClient();
-
 export default Index;
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   let host = ctx.req.headers.host;
@@ -483,11 +478,12 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     ?.toLowerCase() || "en") as Language;
 
   try {
-    const landingPage = await GetLandingPageService({
-      domain: host,
+    const { landingPage, version } = await GetLandingPageFromBlob({
+      host,
       language: initialGuess,
-      prisma,
     });
+    // Lets the dashboard verify a publish reached this site (see lander-publish).
+    if (version) ctx.res.setHeader(LANDER_VERSION_HEADER, version);
 
     const { pickLanguage } = await import("../server/render/pick-language");
     const supported = (

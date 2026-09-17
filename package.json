@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@netlify/blobs": "^11.1.0",
     "@prisma/client": "^6.11.1",
     "axios": "^1.5.1",
     "jsdom": "^26.1.0",
