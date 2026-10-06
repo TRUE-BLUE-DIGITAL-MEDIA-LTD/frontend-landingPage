@@ -1,6 +1,9 @@
 import { CreateEmailService, ValidateEmail } from "@/services/email";
 import { ResponseGetLandingPageService } from "@/services/landingPage";
-import { GetLandingPageFromBlob, LANDER_VERSION_HEADER } from "@/services/landerBlob";
+import {
+  GetLandingPageFromBlob,
+  LANDER_VERSION_HEADER,
+} from "@/services/landerBlob";
 import { DirectLinkService } from "@/services/merchant";
 import * as crypto from "crypto";
 import { JSDOM } from "jsdom";
@@ -19,10 +22,7 @@ import {
 import { isMainTarget } from "@/services/main-target";
 import { isNewTabAnchor } from "@/services/new-tab";
 import { resolveSelfAnchorToMainLink } from "@/services/main-cta";
-import {
-  countryFromNetlifyHeader,
-  NETLIFY_GEO_HEADER,
-} from "../server/geo";
+import { countryFromNetlifyHeader, NETLIFY_GEO_HEADER } from "../server/geo";
 
 function Index({
   landingPage,
@@ -322,15 +322,6 @@ function Index({
     try {
       event("click", { category: "quiz-complete", label: base });
       trackerRef.current?.trackClick(base);
-      Swal.fire({
-        title: "Finding your matches",
-        html: "Loading....",
-        allowEscapeKey: false,
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        },
-      });
       if (email) {
         await CreateEmailService({
           email,
