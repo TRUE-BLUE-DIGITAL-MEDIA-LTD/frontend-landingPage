@@ -65,11 +65,44 @@ export function pickFromBlob(
   return { ...picked, domain } as unknown as ResponseGetLandingPageService;
 }
 
+/**
+ * Local dev has no Netlify Blobs context. Unless NETLIFY_SITE_ID +
+ * NETLIFY_BLOBS_TOKEN point at a real site, dev reads the lander straight from
+ * the dev Mongo (the pre-blob path). Production never takes this branch.
+ */
+export function shouldUseDevMongo(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.NEXT_PUBLIC_NODE_ENV !== "development") return false;
+  return !(env.NETLIFY_SITE_ID && env.NETLIFY_BLOBS_TOKEN);
+}
+
+async function getLandingPageFromDevMongo(dto: {
+  host: string;
+  language: Language;
+  route?: string;
+}): Promise<ResponseGetLandingPageService> {
+  const [{ PrismaClient }, { GetLandingPageService }] = await Promise.all([
+    import("@prisma/client"),
+    import("./landingPage"),
+  ]);
+  // Reuse one client across hot reloads.
+  const g = globalThis as unknown as { __oxyDevPrisma?: InstanceType<typeof PrismaClient> };
+  g.__oxyDevPrisma ??= new PrismaClient();
+  return GetLandingPageService({
+    domain: dto.host,
+    language: dto.language,
+    route: dto.route,
+    prisma: g.__oxyDevPrisma,
+  });
+}
+
 export async function GetLandingPageFromBlob(dto: {
   host: string;
   language: Language;
   route?: string;
 }): Promise<{ landingPage: ResponseGetLandingPageService; version: string | null }> {
+  if (shouldUseDevMongo()) {
+    return { landingPage: await getLandingPageFromDevMongo(dto), version: null };
+  }
   const blob = await readLanderBlob();
   return { landingPage: pickFromBlob(blob, dto), version: blob?.version ?? null };
 }

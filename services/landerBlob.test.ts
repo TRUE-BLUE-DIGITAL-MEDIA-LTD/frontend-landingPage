@@ -1,6 +1,6 @@
 import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { LANDER_VERSION_HEADER, pickFromBlob, readLanderBlob } from "./landerBlob";
+import { LANDER_VERSION_HEADER, pickFromBlob, readLanderBlob, shouldUseDevMongo } from "./landerBlob";
 
 const lander = (over: Partial<any> = {}) => ({
   id: "l1", percent: 100, route: null, language: "en", primaryLanguage: "en",
@@ -54,5 +54,27 @@ describe("landerBlob", () => {
     const zero = pickFromBlob(blob([lander({ percent: 0 })]), { host: "example.com", language: "en" });
     assert.equal(zero.id, undefined);
     assert.equal(zero.domain.name, "example.com");
+  });
+});
+
+describe("shouldUseDevMongo", () => {
+  it("uses Mongo in development without blob credentials", () => {
+    assert.equal(shouldUseDevMongo({ NEXT_PUBLIC_NODE_ENV: "development" } as any), true);
+  });
+
+  it("uses the real blob in development when site id + token are set", () => {
+    assert.equal(
+      shouldUseDevMongo({
+        NEXT_PUBLIC_NODE_ENV: "development",
+        NETLIFY_SITE_ID: "s",
+        NETLIFY_BLOBS_TOKEN: "t",
+      } as any),
+      false,
+    );
+  });
+
+  it("never uses Mongo outside development", () => {
+    assert.equal(shouldUseDevMongo({ NEXT_PUBLIC_NODE_ENV: "production" } as any), false);
+    assert.equal(shouldUseDevMongo({} as any), false);
   });
 });
