@@ -1,4 +1,14 @@
+import {
+  getLanderCountryCode,
+  landerApiUrl,
+  resolveVisitor,
+} from "./lander-api";
 import { computeScrollPct, createExitState } from "./tracking-core";
+
+// Sent as text/plain: a CORS-safelisted type, so these cross-origin beacons
+// need no preflight (and sendBeacon cannot post application/json
+// cross-origin everywhere). The API parses the JSON text either way.
+const BEACON_TYPE = "text/plain;charset=UTF-8";
 
 export interface LanderTracker {
   trackClick(target: string): void;
@@ -15,7 +25,7 @@ const noop: LanderTracker = {
 };
 
 /**
- * Beacon that creates the LanderSession server-side (POST /api/view) and
+ * Beacon that creates the LanderSession on the lander API (POST /v1/view) and
  * returns its sessionId. The page no longer records the view during SSR, so
  * this runs on mount. Best-effort: null on any failure — tracking must never
  * break the lander.
@@ -25,14 +35,18 @@ export async function createLanderSession(opts: {
 }): Promise<string | null> {
   if (typeof window === "undefined") return null;
   try {
-    const res = await fetch("/api/view", {
+    const visitor = resolveVisitor();
+    const res = await fetch(landerApiUrl("/v1/view"), {
       method: "POST",
       keepalive: true,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": BEACON_TYPE },
       body: JSON.stringify({
         landingPageId: opts.landingPageId,
         referrer: document.referrer || null,
         search: window.location.search || null,
+        visitorId: visitor.visitorId,
+        isReturning: visitor.isReturning,
+        countryCode: getLanderCountryCode(),
       }),
     });
     if (!res.ok) return null;
@@ -50,6 +64,7 @@ export function initLanderTracking(opts: {
 }): LanderTracker {
   if (typeof window === "undefined") return noop;
   const { sessionId } = opts;
+  const trackUrl = landerApiUrl("/v1/track");
   const startedAt = Date.now();
   const exit = createExitState();
   let maxScroll = 0;
@@ -57,10 +72,10 @@ export function initLanderTracking(opts: {
 
   const post = (payload: Record<string, unknown>) => {
     try {
-      void fetch("/api/track", {
+      void fetch(trackUrl, {
         method: "POST",
         keepalive: true,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": BEACON_TYPE },
         body: JSON.stringify({ sessionId, ...payload }),
       }).catch(() => {
         /* tracking must never break the lander */
@@ -81,10 +96,8 @@ export function initLanderTracking(opts: {
     // Duplicate exits are fine: the server's exit-type precedence never
     // downgrades, and later time/scroll values are simply fresher.
     try {
-      const blob = new Blob([JSON.stringify(payload)], {
-        type: "application/json",
-      });
-      if (!navigator.sendBeacon?.("/api/track", blob)) post(payload);
+      const blob = new Blob([JSON.stringify(payload)], { type: BEACON_TYPE });
+      if (!navigator.sendBeacon?.(trackUrl, blob)) post(payload);
     } catch {
       post(payload);
     }

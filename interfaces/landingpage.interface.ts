@@ -1,3 +1,5 @@
+import type { Domain } from "./domain.interface";
+
 export interface LandingPage {
   id: string;
   createAt: string;
@@ -23,6 +25,11 @@ export interface LandingPage {
   creatorId: string;
   domainId: string | null;
 }
+/** What the page receives: the picked lander (absent when none matched) plus its domain. */
+export type ResponseGetLandingPageService = (LandingPage | undefined) & {
+  domain: Domain;
+};
+
 export type Language =
   | "th"
   | "en"

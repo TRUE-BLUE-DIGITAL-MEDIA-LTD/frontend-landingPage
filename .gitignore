@@ -35,7 +35,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/generated/prisma
 
 # AI agent artifacts (Claude Code / claude-flow) — never commit
 .claude/
