@@ -7,6 +7,7 @@ import {
   readLanderBlobFromDevApi,
   shouldUseDevApi,
 } from "./landerBlob";
+import { LANDER_API_DEV_ORIGIN } from "./lander-api";
 
 const lander = (over: Partial<any> = {}) => ({
   id: "l1", percent: 100, route: null, language: "en", primaryLanguage: "en",
@@ -93,7 +94,9 @@ describe("readLanderBlobFromDevApi", () => {
       return new Response(JSON.stringify(blob()));
     }) as unknown as typeof fetch;
     assert.deepEqual(await readLanderBlobFromDevApi("localhost:8181", fetchImpl), blob());
-    assert.deepEqual(urls, ["http://localhost:8282/dev/lander-blob?host=localhost%3A8181"]);
+    assert.deepEqual(urls, [
+      `${LANDER_API_DEV_ORIGIN}/dev/lander-blob?host=localhost%3A8181`,
+    ]);
   });
 
   it("returns null when the dev database has no landers for the host", async () => {

@@ -19,7 +19,7 @@ The visitor's country comes from Netlify's `x-nf-geo` header (`server/geo.ts`). 
 | Export | Purpose |
 |---|---|
 | `LANDER_API_ORIGIN` | `https://lander-api.oxyclick.com` — a constant, not an env var, so nothing has to be configured on each Netlify site |
-| `landerApiUrl(path)` | Absolute API URL; a lander on `localhost` talks to `http://localhost:8282` |
+| `landerApiUrl(path)` | Absolute API URL; a lander on `localhost` talks to `http://localhost:3001` |
 | `postLanderApi(path, body)` | JSON POST with a 5-second timeout; rejects on any non-2xx answer or network failure |
 | `setLanderCountryCode` / `getLanderCountryCode` | The Netlify-resolved country code, sent with every call |
 | `resolveVisitor()` | Per-domain visitor id for returning-visitor analytics, kept in `localStorage` |
@@ -42,7 +42,7 @@ The lander has no database access, so local development needs a locally running 
 ```bash
 # 1. In servers/lander-api
 DATABASE_URL="mongodb+srv://…/development-oxyclick" \
-PORT=8282 DEV_ORIGINS="http://localhost:8181" DEV_LANDER_BLOB=1 \
+PORT=3001 DEV_ORIGINS="http://localhost:8181" DEV_LANDER_BLOB=1 \
 bun run dev
 
 # 2. In this folder
@@ -50,7 +50,7 @@ npm install
 npm run dev          # http://localhost:8181
 ```
 
-With `NEXT_PUBLIC_NODE_ENV=development`, the lander asks `http://localhost:8282/dev/lander-blob?host=localhost:8181` for its content, so the dev database needs a domain named `localhost:8181`.
+With `NEXT_PUBLIC_NODE_ENV=development`, the lander asks `http://localhost:3001/dev/lander-blob?host=localhost:8181` for its content, so the dev database needs a domain named `localhost:8181`.
 
 To render a real site's published content instead, set `NETLIFY_SITE_ID` and `NETLIFY_BLOBS_TOKEN`; the lander then reads that site's blob store directly.
 

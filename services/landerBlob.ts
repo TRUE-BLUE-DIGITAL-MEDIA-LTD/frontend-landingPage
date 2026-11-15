@@ -91,7 +91,7 @@ export async function readLanderBlobFromDevApi(
     res = await fetchImpl(url);
   } catch {
     throw new Error(
-      `Local lander API is not reachable at ${LANDER_API_DEV_ORIGIN}. Start servers/lander-api with DEV_LANDER_BLOB=1 and PORT=8282.`,
+      `Local lander API is not reachable at ${LANDER_API_DEV_ORIGIN}. Start servers/lander-api with DEV_LANDER_BLOB=1 and PORT=3001.`,
     );
   }
   if (res.status === 404 && (await isUnknownDomain(res))) {
