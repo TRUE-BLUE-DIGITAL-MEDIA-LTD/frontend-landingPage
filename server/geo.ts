@@ -60,3 +60,18 @@ export function countryFromNetlifyHeader(
   const name = geo?.country?.name;
   return typeof name === "string" && name !== "" ? name : undefined;
 }
+
+/**
+ * Resolve the visitor's ISO 3166-1 alpha-2 country code (e.g. "GB") from the
+ * same x-nf-geo header. Best-effort and never throws, like the name lookup.
+ */
+export function countryCodeFromNetlifyHeader(
+  headerValue: string | string[] | undefined,
+): string | undefined {
+  const raw = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  if (!raw) return undefined;
+  const code = decodeGeoPayload(raw)?.country?.code;
+  return typeof code === "string" && /^[a-z]{2}$/i.test(code)
+    ? code.toUpperCase()
+    : undefined;
+}

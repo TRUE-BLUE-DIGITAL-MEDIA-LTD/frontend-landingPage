@@ -1,5 +1,4 @@
 import { CreateEmailService, ValidateEmail } from "@/services/email";
-import { ResponseGetLandingPageService } from "@/services/landingPage";
 import {
   GetLandingPageFromBlob,
   LANDER_VERSION_HEADER,
@@ -13,7 +12,7 @@ import { useRouter } from "next/router";
 import { event, GoogleAnalytics } from "nextjs-google-analytics";
 import { useEffect, useRef } from "react";
 import Swal from "sweetalert2";
-import { Language } from "../interfaces";
+import { Language, ResponseGetLandingPageService } from "../interfaces";
 import {
   createLanderSession,
   initLanderTracking,
@@ -22,23 +21,41 @@ import {
 import { isMainTarget } from "@/services/main-target";
 import { isNewTabAnchor } from "@/services/new-tab";
 import { resolveSelfAnchorToMainLink } from "@/services/main-cta";
-import { countryFromNetlifyHeader, NETLIFY_GEO_HEADER } from "../server/geo";
+import { initSignupForms } from "@/services/signup-form";
+import {
+  landerApiOrigin,
+  setLanderCountryCode,
+  setLegacyVisitorId,
+} from "@/services/lander-api";
+import {
+  countryCodeFromNetlifyHeader,
+  countryFromNetlifyHeader,
+  NETLIFY_GEO_HEADER,
+} from "../server/geo";
 
 function Index({
   landingPage,
   errorMessage,
   country,
+  countryCode,
+  legacyVisitorId,
   updatedHTML,
   finalLanguage,
 }: {
   landingPage: ResponseGetLandingPageService;
   errorMessage?: string;
   country: string;
+  countryCode?: string | null;
+  legacyVisitorId?: string | null;
   updatedHTML: string;
   finalLanguage: Language;
 }) {
   const router = useRouter();
   const mainLink = landingPage?.mainButton;
+  // Every lander-API call passes the Netlify-resolved country along; set
+  // during render so it is in place before any effect fires a request.
+  setLanderCountryCode(countryCode);
+  setLegacyVisitorId(legacyVisitorId);
 
   const preventDefaultForSubmitButtons = () => {
     const submitButtons = document.querySelectorAll('button[type="submit"]');
@@ -220,6 +237,20 @@ function Index({
   }, []);
 
   useEffect(() => {
+    // "Dating Signup" editor block — see services/signup-form.ts.
+    if (!landingPage?.id || errorMessage || country === "Thailand") return;
+    return initSignupForms(document, {
+      landingPageId: landingPage.id,
+      mainLink,
+      onLeave: ({ outcome, url }) => {
+        event("click", { category: `signup-${outcome}`, label: url });
+        trackerRef.current?.trackClick(url);
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = finalLanguage;
     }
@@ -270,10 +301,13 @@ function Index({
         return;
       } else {
         if (email) {
+          // Saving the lead is best-effort: the API is on another host and
+          // may be slow, rate-limited or blocked — the visitor must still
+          // reach the offer, with their email attached.
           await CreateEmailService({
             email: email,
             landingPageId: landingPage?.id,
-          });
+          }).catch(() => undefined);
           const encode_email = btoa(email);
           const url = new URL(mainLink);
           url.searchParams.set("sub3", encode_email);
@@ -284,7 +318,7 @@ function Index({
         }
       }
     } catch (err) {
-      (window.open(mainLink), "_self");
+      window.open(mainLink, "_self");
     }
   };
   const appendQuizParams = (
@@ -453,6 +487,8 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const country =
     countryFromNetlifyHeader(ctx.req.headers[NETLIFY_GEO_HEADER]) ??
     "United States";
+  const countryCode =
+    countryCodeFromNetlifyHeader(ctx.req.headers[NETLIFY_GEO_HEADER]) ?? null;
 
   if (process.env.NEXT_PUBLIC_NODE_ENV === "development") {
     host = "localhost:8181";
@@ -487,7 +523,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     const finalLanguage = pickLanguage(acceptLanguage, supported, primary);
 
     // View recording (and the visitor cookie) moved to the client beacon —
-    // see pages/api/view.ts. The render path no longer writes to the DB.
+    // see servers/lander-api (POST /v1/view). The render path never writes to the DB.
 
     const dom = new JSDOM(landingPage.html);
 
@@ -510,6 +546,8 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     stampMultipleFormMeta(dom.window.document, {
       landingPageId: landingPage.id,
       fallbackLink: landingPage.mainButton ?? "",
+      apiOrigin: landerApiOrigin(host ?? ""),
+      countryCode: countryCode ?? "",
     });
 
     // Serialize ONCE at the end
@@ -520,6 +558,12 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
         updatedHTML: updatedHTML ?? null,
         landingPage: landingPage ?? null,
         country,
+        countryCode,
+        // The cookie the lander used to set for returning-visitor analytics;
+        // HttpOnly, so it is handed to the page here (see resolveVisitor).
+        legacyVisitorId: /^[0-9a-f-]{36}$/i.test(ctx.req.cookies?.oxy_vid ?? "")
+          ? ctx.req.cookies.oxy_vid
+          : null,
         finalLanguage,
       },
     };
