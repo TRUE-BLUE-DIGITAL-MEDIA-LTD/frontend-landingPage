@@ -7,7 +7,7 @@
  * var would have to be set on every Netlify site.
  */
 export const LANDER_API_ORIGIN = "https://lander-api.oxyclick.com";
-export const LANDER_API_DEV_ORIGIN = "http://localhost:8282";
+export const LANDER_API_DEV_ORIGIN = "http://localhost:3001";
 
 function isLocalHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1";
@@ -126,7 +126,9 @@ export function setLegacyVisitorId(id: string | null | undefined): void {
  * the API lives on another domain and cannot set a first-party cookie.
  * Without storage access every visit is simply a new visitor.
  */
-export function resolveVisitor(storage?: Pick<Storage, "getItem" | "setItem">): {
+export function resolveVisitor(
+  storage?: Pick<Storage, "getItem" | "setItem">,
+): {
   visitorId: string | null;
   isReturning: boolean;
 } {
