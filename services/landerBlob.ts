@@ -1,6 +1,10 @@
 import { getStore } from "@netlify/blobs";
-import type { Domain, Language } from "../interfaces";
-import type { ResponseGetLandingPageService } from "./landingPage";
+import type {
+  Domain,
+  Language,
+  ResponseGetLandingPageService,
+} from "../interfaces";
+import { LANDER_API_DEV_ORIGIN } from "./lander-api";
 import { pickLander } from "./pick-lander";
 
 export const LANDER_BLOB_STORE = "landers";
@@ -67,32 +71,47 @@ export function pickFromBlob(
 
 /**
  * Local dev has no Netlify Blobs context. Unless NETLIFY_SITE_ID +
- * NETLIFY_BLOBS_TOKEN point at a real site, dev reads the lander straight from
- * the dev Mongo (the pre-blob path). Production never takes this branch.
+ * NETLIFY_BLOBS_TOKEN point at a real site, dev asks a locally running
+ * lander API (servers/lander-api, started with DEV_LANDER_BLOB=1) for the
+ * same blob, built straight from the dev database. This app itself has no
+ * database access. Production never takes this branch.
  */
-export function shouldUseDevMongo(env: NodeJS.ProcessEnv = process.env): boolean {
+export function shouldUseDevApi(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.NEXT_PUBLIC_NODE_ENV !== "development") return false;
   return !(env.NETLIFY_SITE_ID && env.NETLIFY_BLOBS_TOKEN);
 }
 
-async function getLandingPageFromDevMongo(dto: {
-  host: string;
-  language: Language;
-  route?: string;
-}): Promise<ResponseGetLandingPageService> {
-  const [{ PrismaClient }, { GetLandingPageService }] = await Promise.all([
-    import("@prisma/client"),
-    import("./landingPage"),
-  ]);
-  // Reuse one client across hot reloads.
-  const g = globalThis as unknown as { __oxyDevPrisma?: InstanceType<typeof PrismaClient> };
-  g.__oxyDevPrisma ??= new PrismaClient();
-  return GetLandingPageService({
-    domain: dto.host,
-    language: dto.language,
-    route: dto.route,
-    prisma: g.__oxyDevPrisma,
-  });
+export async function readLanderBlobFromDevApi(
+  host: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<LanderBlob | null> {
+  const url = `${LANDER_API_DEV_ORIGIN}/dev/lander-blob?host=${encodeURIComponent(host)}`;
+  let res: Response;
+  try {
+    res = await fetchImpl(url);
+  } catch {
+    throw new Error(
+      `Local lander API is not reachable at ${LANDER_API_DEV_ORIGIN}. Start servers/lander-api with DEV_LANDER_BLOB=1 and PORT=3001.`,
+    );
+  }
+  if (res.status === 404 && (await isUnknownDomain(res))) {
+    // Same message the old dev database path gave for an unknown domain.
+    throw new Error("This domain doesn't exist in our system");
+  }
+  if (!res.ok) {
+    throw new Error(
+      `Local lander API answered ${res.status} for /dev/lander-blob. Is it started with DEV_LANDER_BLOB=1?`,
+    );
+  }
+  return ((await res.json()) as LanderBlob | null) ?? null;
+}
+
+async function isUnknownDomain(res: Response): Promise<boolean> {
+  const body = (await res
+    .clone()
+    .json()
+    .catch(() => null)) as { errors?: string[] } | null;
+  return body?.errors?.[0] === "DOMAIN_UNKNOWN";
 }
 
 export async function GetLandingPageFromBlob(dto: {
@@ -100,9 +119,8 @@ export async function GetLandingPageFromBlob(dto: {
   language: Language;
   route?: string;
 }): Promise<{ landingPage: ResponseGetLandingPageService; version: string | null }> {
-  if (shouldUseDevMongo()) {
-    return { landingPage: await getLandingPageFromDevMongo(dto), version: null };
-  }
-  const blob = await readLanderBlob();
+  const blob = shouldUseDevApi()
+    ? await readLanderBlobFromDevApi(dto.host)
+    : await readLanderBlob();
   return { landingPage: pickFromBlob(blob, dto), version: blob?.version ?? null };
 }

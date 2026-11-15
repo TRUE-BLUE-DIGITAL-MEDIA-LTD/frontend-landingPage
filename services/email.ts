@@ -1,51 +1,27 @@
-import axios from "axios";
+import { getLanderCountryCode, postLanderApi } from "./lander-api";
 
-export async function CreateEmailService({
+/** Saves the visitor's email as a lead for this lander. Rejects on failure. */
+export function CreateEmailService({
   email,
   landingPageId,
 }: {
   email: string;
   landingPageId: string;
-}) {
-  try {
-    const res = await axios.post(
-      "api/v1/customers",
-      {
-        email,
-        landingPageId,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    return res.data;
-  } catch (err) {
-    console.log(err);
-    throw err.response.data;
-  }
+}): Promise<{ ok: boolean }> {
+  return postLanderApi("/v1/customers", {
+    email,
+    landingPageId,
+    countryCode: getLanderCountryCode(),
+  });
 }
 
-export async function ValidateEmail({
-  email,
-}: {
-  email: string;
-}): Promise<boolean> {
-  try {
-    const res = await axios.post(
-      "api/v1/customers/validate",
-      {
-        email,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    return res.data;
-  } catch (err) {
-    throw err.response?.data;
-  }
+/**
+ * Deep email check (MX records + NeverBounce). Resolves true / false.
+ * Rejects when the check itself could not run (API unreachable, rate limit);
+ * callers treat a rejection as "let the visitor through".
+ */
+export function ValidateEmail({ email }: { email: string }): Promise<boolean> {
+  // The API itself gives up on a slow lookup after 5 s; wait a little longer
+  // than that so its answer can still arrive.
+  return postLanderApi("/v1/customers/validate", { email }, 8000);
 }

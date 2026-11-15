@@ -1,6 +1,13 @@
 import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { LANDER_VERSION_HEADER, pickFromBlob, readLanderBlob, shouldUseDevMongo } from "./landerBlob";
+import {
+  LANDER_VERSION_HEADER,
+  pickFromBlob,
+  readLanderBlob,
+  readLanderBlobFromDevApi,
+  shouldUseDevApi,
+} from "./landerBlob";
+import { LANDER_API_DEV_ORIGIN } from "./lander-api";
 
 const lander = (over: Partial<any> = {}) => ({
   id: "l1", percent: 100, route: null, language: "en", primaryLanguage: "en",
@@ -57,14 +64,14 @@ describe("landerBlob", () => {
   });
 });
 
-describe("shouldUseDevMongo", () => {
-  it("uses Mongo in development without blob credentials", () => {
-    assert.equal(shouldUseDevMongo({ NEXT_PUBLIC_NODE_ENV: "development" } as any), true);
+describe("shouldUseDevApi", () => {
+  it("asks the local lander API in development without blob credentials", () => {
+    assert.equal(shouldUseDevApi({ NEXT_PUBLIC_NODE_ENV: "development" } as any), true);
   });
 
   it("uses the real blob in development when site id + token are set", () => {
     assert.equal(
-      shouldUseDevMongo({
+      shouldUseDevApi({
         NEXT_PUBLIC_NODE_ENV: "development",
         NETLIFY_SITE_ID: "s",
         NETLIFY_BLOBS_TOKEN: "t",
@@ -73,8 +80,44 @@ describe("shouldUseDevMongo", () => {
     );
   });
 
-  it("never uses Mongo outside development", () => {
-    assert.equal(shouldUseDevMongo({ NEXT_PUBLIC_NODE_ENV: "production" } as any), false);
-    assert.equal(shouldUseDevMongo({} as any), false);
+  it("never takes the dev path outside development", () => {
+    assert.equal(shouldUseDevApi({ NEXT_PUBLIC_NODE_ENV: "production" } as any), false);
+    assert.equal(shouldUseDevApi({} as any), false);
+  });
+});
+
+describe("readLanderBlobFromDevApi", () => {
+  it("fetches the blob for the host from the local lander API", async () => {
+    const urls: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      urls.push(url);
+      return new Response(JSON.stringify(blob()));
+    }) as unknown as typeof fetch;
+    assert.deepEqual(await readLanderBlobFromDevApi("localhost:8181", fetchImpl), blob());
+    assert.deepEqual(urls, [
+      `${LANDER_API_DEV_ORIGIN}/dev/lander-blob?host=localhost%3A8181`,
+    ]);
+  });
+
+  it("returns null when the dev database has no landers for the host", async () => {
+    const fetchImpl = (async () => new Response("null")) as unknown as typeof fetch;
+    assert.equal(await readLanderBlobFromDevApi("nope", fetchImpl), null);
+  });
+
+  it("explains how to start the API when it is down or the route is disabled", async () => {
+    const down = (async () => {
+      throw new Error("ECONNREFUSED");
+    }) as unknown as typeof fetch;
+    await assert.rejects(readLanderBlobFromDevApi("h", down), /DEV_LANDER_BLOB=1/);
+    const disabled = (async () => new Response("{}", { status: 404 })) as unknown as typeof fetch;
+    await assert.rejects(readLanderBlobFromDevApi("h", disabled), /answered 404/);
+  });
+
+  it("reports an unknown domain the way the old dev path did", async () => {
+    const unknown = (async () =>
+      new Response(JSON.stringify({ success: false, errors: ["DOMAIN_UNKNOWN"] }), {
+        status: 404,
+      })) as unknown as typeof fetch;
+    await assert.rejects(readLanderBlobFromDevApi("h", unknown), /doesn't exist in our system/);
   });
 });

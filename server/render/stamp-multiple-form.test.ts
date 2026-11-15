@@ -20,6 +20,30 @@ describe("stampMultipleFormMeta", () => {
     });
   });
 
+  it("stamps the lander API origin and country when provided", () => {
+    const dom = new JSDOM(`<div class="oxy-multiple-form"></div>`);
+    stampMultipleFormMeta(dom.window.document, {
+      landingPageId: "lp123",
+      fallbackLink: "",
+      apiOrigin: "https://lander-api.example",
+      countryCode: "DE",
+    });
+    const root = dom.window.document.querySelector(".oxy-multiple-form")!;
+    expect(root.getAttribute("data-oxy-api")).toBe("https://lander-api.example");
+    expect(root.getAttribute("data-oxy-country")).toBe("DE");
+  });
+
+  it("leaves both unstamped when unknown, so the runtime keeps its fallback", () => {
+    const dom = new JSDOM(`<div class="oxy-multiple-form"></div>`);
+    stampMultipleFormMeta(dom.window.document, {
+      landingPageId: "lp123",
+      fallbackLink: "",
+    });
+    const root = dom.window.document.querySelector(".oxy-multiple-form")!;
+    expect(root.hasAttribute("data-oxy-api")).toBe(false);
+    expect(root.hasAttribute("data-oxy-country")).toBe(false);
+  });
+
   it("is a no-op on pages without the form", () => {
     const dom = new JSDOM(`<div class="other"></div>`);
     expect(() =>
